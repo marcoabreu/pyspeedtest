@@ -12,14 +12,17 @@ import re
 import string
 import sys
 import platform
+import ssl
 
 from math import sqrt
 from threading import currentThread, Thread
 from time import time
 
 try:
+    from httplib import HTTPSConnection
     from httplib import HTTPConnection
 except ImportError:
+    from http.client import HTTPSConnection
     from http.client import HTTPConnection
 
 try:
@@ -77,8 +80,18 @@ class SpeedTest(object):
             connection.set_debuglevel(self.http_debug)
             connection.connect()
             return connection
-        except:
-            raise Exception('Unable to connect to %r' % url)
+        except Exception as e:
+            raise Exception('Unable to connect to %r' % url, e)
+
+    def connect_https(self, url):
+        try:
+            connection = HTTPSConnection(url, context=ssl._create_unverified_context())
+            connection.set_debuglevel(self.http_debug)
+            connection.connect()
+            return connection
+        except Exception as e:
+            raise Exception('Unable to connect to %r' % url, e)
+
 
     def downloadthread(self, connection, url):
         connection.request('GET', url, None, {'Connection': 'Keep-Alive'})
@@ -183,7 +196,7 @@ class SpeedTest(object):
         return total_ms
 
     def chooseserver(self):
-        connection = self.connect('www.speedtest.net')
+        connection = self.connect_https('www.speedtest.net')
         now = int(time() * 1000)
         # really contribute to speedtest.net OS statistics
         # maybe they won't block us again...
@@ -205,8 +218,9 @@ class SpeedTest(object):
         LOG.info('Your IP: %s', location[0])
         LOG.info('Your latitude: %s', location[1])
         LOG.info('Your longitude: %s', location[2])
+        connection = self.connect('c.speedtest.net')
         connection.request(
-            'GET', '/speedtest-servers.php?x=%d' % now, None, extra_headers)
+            'GET', '/speedtest-servers-static.php?x=%d' % now, None, extra_headers)
         response = connection.getresponse()
         reply = response.read().decode('utf-8')
         server_list = re.findall(
